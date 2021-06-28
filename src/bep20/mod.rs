@@ -1,12 +1,20 @@
-use ethers::prelude::{Address, Contract, Http, Provider, I256};
+use std::str::FromStr;
 use std::sync::Arc;
 
+use ethers::prelude::{
+    Address, Contract, Http, LocalWallet, Middleware, Provider, SignerMiddleware,
+    TransactionRequest, I256,
+};
+use ethers::signers::Signer;
+use ethers::utils::parse_ether;
+
 use super::util;
-use std::str::FromStr;
+use ethers::types::U256;
 
 pub struct Bep20Token {
     token_contract: Contract<Arc<Provider<Http>>>,
     provider: Arc<Provider<Http>>,
+    signer: SignerMiddleware<Arc<Provider<Http>>, LocalWallet>,
 }
 
 impl Bep20Token {
@@ -14,6 +22,7 @@ impl Bep20Token {
         token_contract_address: String,
         token_contract_abi_path: String,
         provider: Arc<Provider<Http>>,
+        signer: LocalWallet,
     ) -> Bep20Token {
         Bep20Token {
             token_contract: util::Util::get_contract(
@@ -22,6 +31,7 @@ impl Bep20Token {
                 provider.clone(),
             ),
             provider: provider.clone(),
+            signer: SignerMiddleware::new(provider.clone(), signer),
         }
     }
 
@@ -85,7 +95,28 @@ impl Bep20Token {
             .expect("error while method call allowance")
     }
 
-    fn approve_spend_allowance(&self, spender: &str, amount: f64) {
-        todo!()
+    pub async fn approve_spend_allowance(&self, spender: &str, amount: U256) {
+        let encoded_data = self
+            .token_contract
+            .encode(
+                "approve",
+                (spender.parse::<Address>().expect("spender_add"), amount),
+            )
+            .expect("encoding error");
+
+        let tx_req = TransactionRequest::new()
+            .from(self.signer.address())
+            .to(self.token_contract.address())
+            .data(encoded_data);
+
+        let tx_receipt = self
+            .signer
+            .send_transaction(tx_req, None)
+            .await
+            .expect("problem while tx exec")
+            .await
+            .expect("pending tx exec error");
+
+        println!("executed transaction {:#?}", tx_receipt)
     }
 }

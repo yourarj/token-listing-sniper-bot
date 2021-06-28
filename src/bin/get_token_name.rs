@@ -1,27 +1,35 @@
 use block_bot::bep20;
-use ethers::prelude::{Http, Provider};
+use ethers::prelude::{Http, LocalWallet, Provider, U256};
 use std::convert::TryFrom;
 
 #[tokio::main]
 async fn main() {
-    let provider = Provider::<Http>::try_from("https://bsc-dataseed.binance.org/")
-        .expect("error while creating Http provider");
+    let pvt_key = std::env::var("mtmsk_acc").expect("account pvt key not found");
+    let token_address = std::env::var("token_address").expect("token address");
+    let provider_url = std::env::var("provider_url").expect("provider url");
+    let spender_address = std::env::var("spender_address").expect("spender_address");
+
+    let provider =
+        Provider::<Http>::try_from(provider_url).expect("error while creating Http provider");
+
+    let wallet = pvt_key
+        .parse::<LocalWallet>()
+        .expect("error instantiating local_wallet");
+
+    let user_address = format!("{:?}", wallet.address());
+
+    println!("user wallet address is {}", user_address);
 
     let s_fund = bep20::Bep20Token::new(
-        "0x477bc8d23c634c154061869478bce96be6045d12".to_string(),
+        token_address,
         "./abi/bep-20-token-abi.json".to_string(),
         std::sync::Arc::new(provider),
+        wallet,
     );
-
-    let ua_os_string =
-        std::env::var_os("user_wallet_address").expect("unable to find user_address env_var");
-    let user_address = ua_os_string
-        .to_str()
-        .expect("unable to convert OsString to &str");
 
     let name = s_fund.get_name().await;
 
-    let balance = s_fund.get_balance(user_address).await;
+    let balance = s_fund.get_balance(&user_address).await;
 
     let symbol = s_fund.get_symbol().await;
 
@@ -29,8 +37,8 @@ async fn main() {
 
     let total_supply = s_fund.get_total_supply().await;
 
-    let allowed_amount = s_fund
-        .get_spend_allowance(user_address, "0xd30a7e71506A98Ffe9ce941753Ae0Ba8C05dA70A")
+    let mut allowed_amount = s_fund
+        .get_spend_allowance(&user_address, &spender_address)
         .await;
 
     println!(
@@ -42,5 +50,24 @@ async fn main() {
     balance: {}\n\
     spend limit for bscpad are {}",
         name, symbol, decimals, total_supply, balance, allowed_amount
-    )
+    );
+
+    s_fund
+        .approve_spend_allowance(&spender_address, U256::from(88u128))
+        .await;
+
+    allowed_amount = s_fund
+        .get_spend_allowance(&user_address, &spender_address)
+        .await;
+
+    println!(
+        "Following are the token details \n\
+    token: {}\n\
+    symbol: {}\n\
+    decimals: {}\n\
+    total supply: {}\n\
+    balance: {}\n\
+    spend limit for bscpad are {}",
+        name, symbol, decimals, total_supply, balance, allowed_amount
+    );
 }
