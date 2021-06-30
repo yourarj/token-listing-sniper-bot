@@ -1,13 +1,14 @@
 use block_bot::bep20;
 use ethers::prelude::{Http, LocalWallet, Provider, I256, U256};
 use std::convert::TryFrom;
+use std::{env, sync};
 
 #[tokio::main]
 async fn main() {
-    let pvt_key = std::env::var("mtmsk_acc").expect("account pvt key not found");
-    let token_address = std::env::var("token_address").expect("token address");
-    let provider_url = std::env::var("provider_url").expect("provider url");
-    let spender_address = std::env::var("spender_address").expect("spender_address");
+    let pvt_key = env::var("mtmsk_acc").expect("account pvt key not found");
+    let token_address = env::var("token_address").expect("token address");
+    let provider_url = env::var("provider_url").expect("provider url");
+    let spender_address = env::var("spender_address").expect("spender_address");
 
     let provider =
         Provider::<Http>::try_from(provider_url).expect("error while creating Http provider");
@@ -23,7 +24,7 @@ async fn main() {
     let s_fund = bep20::Bep20Token::new(
         token_address,
         "./abi/bep-20-token-abi.json".to_string(),
-        std::sync::Arc::new(provider),
+        sync::Arc::new(provider),
         wallet,
     );
 
