@@ -35,7 +35,15 @@ async fn main() {
         let mut counter = 1u128;
         while let Some(tx) = receiver.recv().await {
             writer
-                .write(format!("{}: {:05} {:?}\n", chrono::Utc::now(), counter, tx).as_bytes())
+                .write(
+                    format!(
+                        "{} {:010} {:?}\n",
+                        chrono::Utc::now().format("%Y-%m-%dT%I:%M:%S%.6f %p %Z"),
+                        counter,
+                        tx
+                    )
+                    .as_bytes(),
+                )
                 .expect("error while writing to file");
             counter += 1;
         }
