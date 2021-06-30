@@ -1,5 +1,5 @@
 use block_bot::bep20;
-use ethers::prelude::{Http, LocalWallet, Provider, U256};
+use ethers::prelude::{Http, LocalWallet, Provider, I256, U256};
 use std::convert::TryFrom;
 
 #[tokio::main]
@@ -53,7 +53,15 @@ async fn main() {
     );
 
     s_fund
-        .approve_spend_allowance(&spender_address, U256::from(88u128))
+        .approve_spend_allowance(
+            &spender_address,
+            U256::try_from(
+                allowed_amount
+                    .checked_mul(I256::from(2u128))
+                    .expect("multiplication_error"),
+            )
+            .expect(""),
+        )
         .await;
 
     allowed_amount = s_fund

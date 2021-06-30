@@ -6,10 +6,10 @@ use ethers::prelude::{
     TransactionRequest, I256,
 };
 use ethers::signers::Signer;
+use ethers::types::U256;
 use ethers::utils::parse_ether;
 
 use super::util;
-use ethers::types::U256;
 
 pub struct Bep20Token {
     token_contract: Contract<Arc<Provider<Http>>>,
