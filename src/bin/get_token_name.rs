@@ -1,4 +1,4 @@
-use block_bot::bep20;
+use block_bot::contract;
 use ethers::prelude::{Http, LocalWallet, Provider, I256, U256};
 use std::convert::TryFrom;
 use std::{env, sync};
@@ -21,7 +21,7 @@ async fn main() {
 
     println!("user wallet address is {}", user_address);
 
-    let s_fund = bep20::Bep20Token::new(
+    let s_fund = contract::bep20::Bep20Token::new(
         token_address,
         "./abi/bep-20-token-abi.json".to_string(),
         sync::Arc::new(provider),

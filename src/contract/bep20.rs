@@ -2,14 +2,12 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use ethers::prelude::{
-    Address, Contract, Http, I256, LocalWallet, Middleware, Provider,
-    SignerMiddleware, TransactionRequest,
+    Address, Contract, Http, LocalWallet, Middleware, Provider, SignerMiddleware,
+    TransactionRequest, I256,
 };
-use ethers::signers::Signer;
 use ethers::types::U256;
-use ethers::utils::parse_ether;
 
-use super::util;
+use crate::util;
 
 pub struct Bep20Token {
     token_contract: Contract<Arc<Provider<Http>>>,
@@ -17,6 +15,7 @@ pub struct Bep20Token {
     signer: SignerMiddleware<Arc<Provider<Http>>, LocalWallet>,
 }
 
+// TODO check how can we reuse the common struct data members and associated ::new method
 impl Bep20Token {
     pub fn new(
         token_contract_address: String,

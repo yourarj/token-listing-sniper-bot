@@ -1,2 +1,2 @@
-pub mod bep20;
+pub mod contract;
 pub mod util;

@@ -1,4 +1,4 @@
-use ethers::abi::{parse_abi, Abi};
+use ethers::abi::Abi;
 use ethers::prelude::{Address, Contract, Http, Provider};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -17,7 +17,6 @@ impl Util {
         Contract::new(
             Address::from_str(contract_address).unwrap(),
             serde_json::from_str::<Abi>(&file).expect(""),
-            //parse_abi(&[&file[..]]).unwrap(),
             provider.clone(),
         )
     }
