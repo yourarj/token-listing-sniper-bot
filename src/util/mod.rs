@@ -1,5 +1,6 @@
+use crate::contract::bep20::Bep20Token;
 use ethers::abi::Abi;
-use ethers::prelude::{Address, Contract, Http, Provider};
+use ethers::prelude::{Address, Contract, Http, LocalWallet, Provider, U256};
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -19,5 +20,44 @@ impl Util {
             serde_json::from_str::<Abi>(&file).expect(""),
             provider.clone(),
         )
+    }
+
+    pub async fn do_prerequisites(token_contract: Bep20Token, wallet: LocalWallet, spender: &str) {
+        let address = &format!("{:?}", wallet.address());
+        let (total_supply, allowed_amt) =
+            Self::print_bep20_token_details(&token_contract, address, spender).await;
+
+        // if allowed spend amount is less than half of supply set it to total supply
+        if allowed_amt.le(&total_supply
+            .checked_div(U256::from(2u8))
+            .expect("div_error"))
+        {
+            &token_contract
+                .approve_spend_allowance(&spender, total_supply)
+                .await;
+            let _details = Self::print_bep20_token_details(&token_contract, address, spender);
+        }
+        println!("Token pre-requisites completed");
+    }
+
+    pub async fn print_bep20_token_details(
+        token_contract: &Bep20Token,
+        user_address: &str,
+        spender_address: &str,
+    ) -> (U256, U256) {
+        let name = token_contract.get_name().await;
+        let balance = token_contract.get_balance(&user_address).await;
+        let symbol = token_contract.get_symbol().await;
+        let decimals = token_contract.get_decimals().await;
+        let total_supply = token_contract.get_total_supply().await;
+        let allowed_amount = token_contract
+            .get_spend_allowance(&user_address, &spender_address)
+            .await;
+
+        println!(
+            "{} ({}), decimals: {}, supply: {}, balance: {}, spend limit: {}",
+            name, symbol, decimals, total_supply, balance, allowed_amount
+        );
+        (total_supply, allowed_amount)
     }
 }

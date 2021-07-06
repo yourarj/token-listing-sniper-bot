@@ -49,22 +49,31 @@ async fn main() {
         .collect();
 
     let cake_router = Arc::new(contract::cake_router::CakeRouter::new(
-        contract_to_watch,
+        contract_to_watch.clone(),
         "./abi/cake-router.json".to_string(),
         providers.get(0).expect("empty providers").clone(),
-        wallet,
+        wallet.clone(),
     ));
 
     let ws = Ws::connect(wss_provider_url)
         .await
         .expect("Error connecting to WSS provider");
 
-    let wss_provider = Provider::new(ws).interval(std::time::Duration::from_millis(100));
+    let wss_provider = Provider::new(ws).interval(std::time::Duration::from_millis(30));
+
+    // bep20 token prerequisites
+    let bep20token = contract::bep20::Bep20Token::new(
+        desired_token_address.clone(),
+        String::from("./abi/bep-20-token-abi.json"),
+        providers.get(0).expect("empty providers").clone(),
+        wallet.clone(),
+    );
+    util::Util::do_prerequisites(bep20token, wallet.clone(), &contract_to_watch).await;
 
     let mut stream = wss_provider
         .subscribe_pending_txs()
         .await
-        .expect("Error while watching pending transactions");
+        .expect("Error while subscribing to pending transactions topic");
 
     let (sender, mut receiver) = tokio::sync::mpsc::channel::<(H256, U256, U256)>(1000);
     let safe_sender = Arc::new(sender);
@@ -85,10 +94,13 @@ async fn main() {
         // receive message sent by transmitter
         while let Some((tx, gas, gas_price)) = receiver.recv().await {
             if counter < 2 {
+                // let the transaction spend 4 time gas of source transaction
                 let gas = gas.checked_mul(U256::from(4)).expect("multi_except");
+
+                // execute transaction
                 cake_clone
                     .swap_exact_eth_for_tokens(
-                        parse_units(U256::from(100000000u32), Units::Gwei)
+                        parse_units(U256::from(10000u32), Units::Gwei)
                             .expect("issue parsing units"),
                         &wbnb_address,
                         &desired_token_address,
@@ -96,6 +108,7 @@ async fn main() {
                         gas_price,
                     )
                     .await;
+
                 let received_message = format!(
                     "{} {:010} {:?}\n",
                     chrono::Utc::now().format("%Y-%m-%dT%I:%M:%S%.6f %p %Z"),

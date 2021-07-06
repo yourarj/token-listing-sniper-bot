@@ -70,18 +70,18 @@ impl Bep20Token {
             .expect("error while method call decimals")
     }
 
-    pub async fn get_total_supply(&self) -> I256 {
+    pub async fn get_total_supply(&self) -> U256 {
         self.token_contract
-            .method::<_, I256>("totalSupply", ())
+            .method::<_, U256>("totalSupply", ())
             .unwrap()
             .call()
             .await
             .expect("error while method call totalSupply")
     }
 
-    pub async fn get_spend_allowance(&self, owner: &str, spender: &str) -> I256 {
+    pub async fn get_spend_allowance(&self, owner: &str, spender: &str) -> U256 {
         self.token_contract
-            .method::<_, I256>(
+            .method::<_, U256>(
                 "allowance",
                 (
                     Address::from_str(owner).expect("invalid owner address"),
