@@ -11,14 +11,13 @@ use crate::util;
 
 pub struct Bep20Token {
     token_contract: Contract<Arc<Provider<Http>>>,
-    provider: Arc<Provider<Http>>,
     signer: SignerMiddleware<Arc<Provider<Http>>, LocalWallet>,
 }
 
 // TODO check how can we reuse the common struct data members and associated ::new method
 impl Bep20Token {
     pub fn new(
-        token_contract_address: String,
+        token_contract_address: Address,
         token_contract_abi_path: String,
         provider: Arc<Provider<Http>>,
         signer: LocalWallet,
@@ -29,7 +28,6 @@ impl Bep20Token {
                 &token_contract_abi_path,
                 provider.clone(),
             ),
-            provider: provider.clone(),
             signer: SignerMiddleware::new(provider.clone(), signer),
         }
     }
@@ -52,9 +50,9 @@ impl Bep20Token {
             .expect("error while method call symbol")
     }
 
-    pub async fn get_balance(&self, address: &str) -> I256 {
+    pub async fn get_balance(&self, address: &str) -> U256 {
         self.token_contract
-            .method::<_, I256>("balanceOf", Address::from_str(address).unwrap())
+            .method::<_, U256>("balanceOf", Address::from_str(address).unwrap())
             .unwrap()
             .call()
             .await
@@ -79,13 +77,13 @@ impl Bep20Token {
             .expect("error while method call totalSupply")
     }
 
-    pub async fn get_spend_allowance(&self, owner: &str, spender: &str) -> U256 {
+    pub async fn get_spend_allowance(&self, owner: &str, spender: Address) -> U256 {
         self.token_contract
             .method::<_, U256>(
                 "allowance",
                 (
                     Address::from_str(owner).expect("invalid owner address"),
-                    Address::from_str(spender).expect("invalid spender address"),
+                    spender,
                 ),
             )
             .unwrap()
@@ -94,13 +92,10 @@ impl Bep20Token {
             .expect("error while method call allowance")
     }
 
-    pub async fn approve_spend_allowance(&self, spender: &str, amount: U256) {
+    pub async fn approve_spend_allowance(&self, spender: Address, amount: U256) {
         let encoded_data = self
             .token_contract
-            .encode(
-                "approve",
-                (spender.parse::<Address>().expect("spender_add"), amount),
-            )
+            .encode("approve", (spender, amount))
             .expect("encoding error");
 
         let tx_req = TransactionRequest::new()

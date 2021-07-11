@@ -1,14 +1,15 @@
+pub mod env_setup;
+
 use crate::contract::bep20::Bep20Token;
 use ethers::abi::Abi;
 use ethers::prelude::{Address, Contract, Http, LocalWallet, Provider, U256};
-use std::str::FromStr;
 use std::sync::Arc;
 
 pub struct Util;
 
 impl Util {
     pub fn get_contract(
-        contract_address: &str,
+        contract_address: &Address,
         abi_path: &str,
         provider: Arc<Provider<Http>>,
     ) -> Contract<Arc<Provider<Http>>> {
@@ -16,13 +17,17 @@ impl Util {
             std::fs::read_to_string(abi_path).expect("something went wrong while reading abi file");
 
         Contract::new(
-            Address::from_str(contract_address).unwrap(),
+            *contract_address,
             serde_json::from_str::<Abi>(&file).expect(""),
             provider.clone(),
         )
     }
 
-    pub async fn do_prerequisites(token_contract: Bep20Token, wallet: LocalWallet, spender: &str) {
+    pub async fn do_prerequisites(
+        token_contract: &Bep20Token,
+        wallet: LocalWallet,
+        spender: Address,
+    ) {
         let address = &format!("{:?}", wallet.address());
         let (total_supply, allowed_amt) =
             Self::print_bep20_token_details(&token_contract, address, spender).await;
@@ -33,7 +38,7 @@ impl Util {
             .expect("div_error"))
         {
             &token_contract
-                .approve_spend_allowance(&spender, total_supply)
+                .approve_spend_allowance(spender, total_supply)
                 .await;
             let _details = Self::print_bep20_token_details(&token_contract, address, spender);
         }
@@ -43,7 +48,7 @@ impl Util {
     pub async fn print_bep20_token_details(
         token_contract: &Bep20Token,
         user_address: &str,
-        spender_address: &str,
+        spender_address: Address,
     ) -> (U256, U256) {
         let name = token_contract.get_name().await;
         let balance = token_contract.get_balance(&user_address).await;
@@ -51,7 +56,7 @@ impl Util {
         let decimals = token_contract.get_decimals().await;
         let total_supply = token_contract.get_total_supply().await;
         let allowed_amount = token_contract
-            .get_spend_allowance(&user_address, &spender_address)
+            .get_spend_allowance(&user_address, spender_address)
             .await;
 
         println!(
