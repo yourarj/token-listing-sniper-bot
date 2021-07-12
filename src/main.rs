@@ -1,17 +1,15 @@
-use std::convert::TryInto;
 use std::io::{BufWriter, Write};
 use std::sync::Arc;
 
-use ethers::prelude::{Address, Bytes, Middleware, ProviderError, StreamExt, U256};
+use block_bot::contract;
+use block_bot::util;
+use block_bot::util::env_setup::Env;
+use block_bot::util::transaction::{check_tx, fetch_transaction};
+
+use ethers::prelude::{Middleware, StreamExt, U256};
 use ethers::types::H256;
 use ethers::utils::{parse_units, Units};
-use rand;
-use rand::Rng;
 use std::error::Error;
-use util::env_setup::Env;
-
-mod contract;
-mod util;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -21,7 +19,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let http_providers = &env.http_providers;
 
-    let cake_router = Arc::new(contract::cake_router::CakeRouter::new(
+    let cake_router_contract = Arc::new(contract::cake_router::CakeRouter::new(
         *Arc::clone(&env.contract_to_watch),
         "./abi/cake-router.json".to_string(),
         Arc::clone(env.http_providers.get(0).unwrap()),
@@ -61,10 +59,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let transaction_file = std::fs::File::create(path).expect("Error creating file");
     let mut writer = BufWriter::new(transaction_file);
 
-    let mut rand_num = rand::thread_rng();
-
     // clone movable inputs for receive thread
-    let arc_cake = Arc::clone(&cake_router);
+    let arc_cake = Arc::clone(&cake_router_contract);
     let arc_bnb = Arc::clone(&env.bnb_address);
     let arc_desired_token = Arc::clone(&env.desired_token);
     let arc_wss_provider = Arc::clone(&env.wss_provider);
@@ -122,91 +118,30 @@ async fn main() -> Result<(), Box<dyn Error>> {
     });
 
     // process stream of processing pending tx
-    while let Some(tx) = stream.next().await {
-        let cloned_sender = Arc::clone(&sender);
-
-        // to prevent bottleneck to only one http provider
-        let arc_provider = Arc::clone(
-            http_providers
-                .get(rand_num.gen_range(0..http_providers.len()))
-                .expect("item_not_found"),
-        );
+    while let Some(tx_hash) = stream.next().await {
 
         // clone required arc instances to pass to tokio thread
-        let arc_cake_router = cake_router.clone();
         let arc_contract_to_watch = Arc::clone(&env.contract_to_watch);
         let arc_desired_token = Arc::clone(&env.desired_token);
-
-        println!("Got tx {:?}", tx);
+        let sender = Arc::clone(&sender);
+        let cake_router_contract = Arc::clone(&cake_router_contract);
+        let http_providers = http_providers.clone();
 
         // spawn a new tokio thread for fetching the details of received pending tx hash
         tokio::spawn(async move {
-            match arc_provider.get_transaction(tx).await {
-                Ok(Some(transaction)) => {
-                    if let Some(tx_to) = transaction.to {
-                        if tx_to.eq(&arc_contract_to_watch) {
-                            // extract method selector from the transaction input
-                            let fn_selector = transaction.input.as_ref()[0..=3]
-                                .try_into()
-                                .expect("got an error");
-
-                            // extract method name from the selector
-                            let method_name = arc_cake_router.get_method_name(fn_selector);
-
-                            // check if the method invoked is liquidity add event
-                            let liquidity_found = if method_name.eq("addLiquidityETH") {
-                                let (token, ..) = arc_cake_router
-                                    .decode_method_inputs::<(Address, U256, U256, U256, Address, U256), Bytes>(
-                                        fn_selector,
-                                        transaction.input,
-                                    )
-                                    .expect("problem decoding");
-                                token.eq(&*arc_desired_token)
-                            } else if method_name.eq("addLiquidity") {
-                                let (token_a, token_b, ..) = arc_cake_router
-                                    .decode_method_inputs::<(Address, Address, U256, U256, U256, U256, Address, U256), Bytes>(
-                                        fn_selector,
-                                        transaction.input,
-                                    )
-                                    .expect("problem decoding");
-                                token_a.eq(&*arc_desired_token) || token_b.eq(&*arc_desired_token)
-                            } else {
-                                // if method invoked is not related to liquidity
-                                false
-                            };
-
-                            // send message over channel if liquidity add event is found
-                            if liquidity_found {
-                                cloned_sender
-                                    .send((tx, transaction.gas, transaction.gas_price))
-                                    .await
-                                    .unwrap_or_else(|_| eprintln!("receiver is already closed"));
-                            }
-                        }
-                    }
-                }
-                Ok(None) => {
-                    /* TODO Insert transaction re-fetch logic as some transactions take time to propogate to
-                     *  other peers in those cases server returns Ok(None) we need to get in touch with other node
-                     *  to check if it has the complete transaction
-                     */
-                    eprintln!("{}", format!("Got Ok(None) while getting tx {:?}", tx))
-                }
-                Err(err) => {
-                    let error_msg = match err {
-                        /* TODO depending JsonRpcClientError type decide whether to re-fetch the tx or not
-                         *  e.g. in case of 429 Too Many Requests */
-                        ProviderError::JsonRpcClientError(rpc_err) => rpc_err.to_string(),
-                        ProviderError::EnsError(ens_err) => ens_err,
-                        ProviderError::SerdeJson(json_err) => json_err.to_string(),
-                        ProviderError::HexError(hex_err) => hex_err.to_string(),
-                        ProviderError::CustomError(cust_err) => cust_err,
-                    };
-                    let string = format!(
-                        "Got error while getting tx {:?},\nreason: {}",
-                        tx, error_msg
-                    );
-                    eprintln!("{}", string);
+            if let Some(transaction) = fetch_transaction(http_providers, tx_hash).await {
+                if check_tx(
+                    &transaction,
+                    &*arc_contract_to_watch,
+                    Arc::clone(&cake_router_contract),
+                    arc_desired_token,
+                )
+                .await
+                {
+                    sender
+                        .send((transaction.hash, transaction.gas, transaction.gas_price))
+                        .await
+                        .unwrap_or_else(|_| eprintln!("receiver is already closed"));
                 }
             }
         });
