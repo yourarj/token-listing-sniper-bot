@@ -19,12 +19,14 @@ pub struct CakeRouter {
 }
 // TODO check how can we reuse the common struct data members and associated ::new method
 impl CakeRouter {
+    #[instrument]
     pub fn new(
         token_contract_address: Address,
         token_contract_abi_path: String,
         provider: Arc<Provider<Http>>,
         signer: LocalWallet,
     ) -> CakeRouter {
+        tracing::info!("instantiating new cake_router");
         CakeRouter {
             token_contract: util::Util::get_contract(
                 &token_contract_address,
@@ -35,6 +37,7 @@ impl CakeRouter {
         }
     }
 
+    #[instrument]
     pub async fn get_amounts_out(
         &self,
         amount_in: U256,
@@ -58,6 +61,7 @@ impl CakeRouter {
         }
     }
 
+    #[instrument]
     pub async fn swap_exact_eth_for_tokens(
         &self,
         spend_amount: U256,
@@ -101,6 +105,7 @@ impl CakeRouter {
         self.send_monitor_tx(tx_req).await;
     }
 
+    #[instrument]
     pub async fn swap_exact_tokens_for_eth(
         &self,
         spend_amount: U256,
@@ -150,6 +155,7 @@ impl CakeRouter {
         self.send_monitor_tx(tx_req).await;
     }
 
+    #[instrument]
     async fn send_monitor_tx(&self, tx_req: TransactionRequest) {
         println!("{}: submitting tx", chrono::Utc::now());
 
@@ -176,6 +182,7 @@ impl CakeRouter {
         );
     }
 
+    #[instrument]
     pub fn decode_method_inputs<D: Detokenize, T: AsRef<[u8]>>(
         &self,
         function_signature: Selector,
@@ -185,6 +192,7 @@ impl CakeRouter {
             .decode_with_selector(function_signature, input)
     }
 
+    #[instrument]
     pub fn get_method_name(&self, selector: Selector) -> String {
         let (method_name, _) = self
             .token_contract

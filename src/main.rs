@@ -10,12 +10,23 @@ use ethers::prelude::{Middleware, StreamExt, U256};
 use ethers::types::H256;
 use ethers::utils::{parse_units, Units};
 use std::error::Error;
+use tracing::Instrument;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    // tracing lib init
+    let file_appender = tracing_appender::rolling::hourly(dir, "example.log");
+    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
+
+    let collector = tracing_subscriber::registry()
+        .with(EnvFilter::from_default_env().add_directive(tracing::Level::TRACE.into()))
+        .with(fmt::Subscriber::new().with_writer(non_blocking));
+    tracing::collect::set_global_default(collector).expect("Unable to set a global collector");
+
+    // env initialization
     let env = Env::new()
         .await
-        .expect("Error occurred while initialization");
+        .unwrap_or_else(tracing::error!("Error occurred while initialization"));
 
     let http_providers = &env.http_providers;
 
@@ -66,6 +77,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let arc_wss_provider = Arc::clone(&env.wss_provider);
     let subscription_id = stream.id;
 
+    // tracing span
+    let tx_receiver_span = tracing::span!(Level::INFO, "tx_reciever_task");
+
     // channel receiver tokio thread
     tokio::spawn(async move {
         // receive message sent by transmitter
@@ -115,12 +129,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 );
             }
         }
+        .instrument(tx_receiver_span);
     });
 
     println!(
         "{} Started monitoring transactions\n",
         chrono::Utc::now().format("%Y-%m-%dT%I:%M:%S%.6f %p %Z")
     );
+
     // process stream of processing pending tx
     while let Some(tx_hash) = stream.next().await {
         // clone required arc instances to pass to tokio thread
@@ -130,26 +146,32 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let cake_router_contract = Arc::clone(&cake_router_contract);
         let http_providers = http_providers.clone();
 
+        // tracing span
+        let tx_fetch_tx_span = tracing::span!(Level::INFO, "tx_fetch_tx_task");
+
         // spawn a new tokio thread for fetching the details of received pending tx hash
-        tokio::spawn(async move {
-            if let Some(transaction) = fetch_transaction(http_providers, tx_hash).await {
-                if check_tx(
-                    &transaction,
-                    &*arc_contract_to_watch,
-                    Arc::clone(&cake_router_contract),
-                    arc_desired_token,
-                )
-                .await
-                {
-                    sender
-                        .send((transaction.hash, transaction.gas, transaction.gas_price))
-                        .await
-                        .unwrap_or_else(|_| eprintln!("receiver is already closed"));
+        tokio::spawn(
+            async move {
+                if let Some(transaction) = fetch_transaction(http_providers, tx_hash).await {
+                    if check_tx(
+                        &transaction,
+                        &*arc_contract_to_watch,
+                        Arc::clone(&cake_router_contract),
+                        arc_desired_token,
+                    )
+                    .await
+                    {
+                        sender
+                            .send((transaction.hash, transaction.gas, transaction.gas_price))
+                            .await
+                            .unwrap_or_else(|_| eprintln!("receiver is already closed"));
+                    }
+                } else {
+                    eprintln!("Eventually Unable to fetch tx {:?}", tx_hash);
                 }
-            } else {
-                eprintln!("Eventually Unable to fetch tx {:?}", tx_hash);
             }
-        });
+            .instrument(tx_fetch_tx_span),
+        );
     }
     println!("While let broken successfully!");
     Ok(())

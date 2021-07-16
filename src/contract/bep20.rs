@@ -17,6 +17,7 @@ pub struct Bep20Token {
 
 // TODO check how can we reuse the common struct data members and associated ::new method
 impl Bep20Token {
+    #[instrument]
     pub fn new(
         token_contract_address: Address,
         token_contract_abi_path: String,
@@ -34,6 +35,7 @@ impl Bep20Token {
         }
     }
 
+    #[instrument]
     pub async fn get_name(&self) -> String {
         self.token_contract
             .method::<_, String>("name", ())
@@ -43,6 +45,7 @@ impl Bep20Token {
             .expect("error while method call name")
     }
 
+    #[instrument]
     pub async fn get_symbol(&self) -> String {
         self.token_contract
             .method::<_, String>("symbol", ())
@@ -52,6 +55,7 @@ impl Bep20Token {
             .expect("error while method call symbol")
     }
 
+    #[instrument]
     pub async fn get_balance(&self, address: &str) -> U256 {
         self.token_contract
             .method::<_, U256>("balanceOf", Address::from_str(address).unwrap())
@@ -61,6 +65,7 @@ impl Bep20Token {
             .expect("error while method call balanceOf")
     }
 
+    #[instrument]
     pub async fn get_decimals(&self) -> I256 {
         self.token_contract
             .method::<_, I256>("decimals", ())
@@ -70,6 +75,7 @@ impl Bep20Token {
             .expect("error while method call decimals")
     }
 
+    #[instrument]
     pub async fn get_total_supply(&self) -> U256 {
         self.token_contract
             .method::<_, U256>("totalSupply", ())
@@ -79,6 +85,7 @@ impl Bep20Token {
             .expect("error while method call totalSupply")
     }
 
+    #[instrument]
     pub async fn get_spend_allowance(&self, owner: &str, spender: Address) -> U256 {
         self.token_contract
             .method::<_, U256>(
@@ -94,6 +101,7 @@ impl Bep20Token {
             .expect("error while method call allowance")
     }
 
+    #[instrument]
     pub async fn approve_spend_allowance(&self, spender: Address, amount: U256) {
         let encoded_data = self
             .token_contract
@@ -128,6 +136,7 @@ impl Bep20Token {
         );
     }
 
+    #[instrument]
     pub fn get_token_address(&self) -> &Address {
         &self.token_contract_address
     }

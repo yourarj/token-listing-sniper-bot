@@ -24,6 +24,7 @@ impl Util {
         )
     }
 
+    #[instrument]
     pub async fn do_prerequisites(
         token_contract: &Bep20Token,
         wallet: LocalWallet,
@@ -46,6 +47,7 @@ impl Util {
         println!("Token pre-requisites completed");
     }
 
+    #[instrument]
     pub async fn print_bep20_token_details(
         token_contract: &Bep20Token,
         user_address: &str,

@@ -9,6 +9,7 @@ use ethers::prelude::{
  * function checks if provided transaction object is of cake router
  * and also the transaction contains deals with desired token only
 **/
+#[instrument]
 pub async fn check_tx(
     transaction: &Transaction,
     contract_to_watch: &Address,
@@ -61,10 +62,12 @@ use rand::prelude::StdRng;
 use rand::{RngCore, SeedableRng};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::Sender;
+use tracing::Instrument;
 
 /** transaction fetching utitlity
  * manages fetching of transaction with retries for non-propogated transactions
 **/
+#[instrument]
 pub async fn fetch_transaction(
     providers: Vec<Arc<Provider<Http>>>,
     tx_hash: H256,
@@ -76,9 +79,18 @@ pub async fn fetch_transaction(
             .get(random.next_u32() as usize % providers.len())
             .expect("item_not_found"),
     );
+
+    tracing::info!("first fetch attempt", tx_hash);
     match arc_provider.get_transaction(tx_hash).await {
-        Ok(Some(tx)) => Some(tx),
-        Ok(None) => get_transaction_from_any(providers, tx_hash, random).await,
+        Ok(Some(tx)) => {
+            tracing::info!("got tx in first attempt", tx_hash);
+            Some(tx)
+        }
+
+        Ok(None) => {
+            tracing::warn!("first fetch attempt returned None");
+            get_transaction_from_any(providers, tx_hash, random).await
+        }
 
         Err(err) => {
             let error_msg = match err {
@@ -90,21 +102,20 @@ pub async fn fetch_transaction(
                 ProviderError::HexError(hex_err) => hex_err.to_string(),
                 ProviderError::CustomError(cust_err) => cust_err,
             };
-            let string = format!(
-                "Got error while getting tx {:?},\nreason: {}",
-                tx_hash, error_msg
-            );
-            eprintln!("{}", string);
+            tracing::error!("tx_fetch_error", error_msg);
             None
         }
     }
 }
 
+#[instrument]
 async fn get_transaction_from_any(
     providers: Vec<Arc<Provider<Http>>>,
     tx_hash: H256,
     mut random: StdRng,
 ) -> Option<Transaction> {
+    tracing::info!("fetching transaction parallely");
+
     let (tx_sender, mut tx_receiver) = mpsc::channel::<Option<Transaction>>(6);
 
     // receiver tokio task
@@ -132,6 +143,7 @@ async fn get_transaction_from_any(
     receiver_response
 }
 
+#[instrument]
 fn fetch_tx_with_multiple_task(
     providers: &Vec<Arc<Provider<Http>>>,
     tx_hash: H256,
@@ -144,15 +156,27 @@ fn fetch_tx_with_multiple_task(
             .expect("item_not_found"),
     );
     let tx_sender_clone = tx_sender.clone();
+    let tx_fetch_tx_span = tracing::span!(Level::INFO, "tx_fetch_tx_task_attempt_2");
 
-    tokio::spawn(async move {
-        match arc_provider.get_transaction(tx_hash).await {
-            Ok(Some(tx)) => tx_sender_clone
-                .send(Some(tx))
-                .await
-                .expect("tx receiver closed"),
-            Ok(None) => {}
-            Err(_) => {}
+    tokio::spawn(
+        async move {
+            tracing::info!("fetching tx");
+            match arc_provider.get_transaction(tx_hash).await {
+                Ok(Some(tx)) => {
+                    tracing::info!("got tx successfully");
+                    tx_sender_clone
+                        .send(Some(tx))
+                        .await
+                        .unwrap_or_else(tracing::warn!("tx receiver already closed"))
+                }
+                Ok(None) => {
+                    tracing::warn!("got none")
+                }
+                Err(_) => {
+                    tracing::warn!("got error")
+                }
+            }
         }
-    });
+        .instrument(tx_fetch_tx_span),
+    );
 }
