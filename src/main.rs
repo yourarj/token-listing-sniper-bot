@@ -71,7 +71,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         // receive message sent by transmitter
         while let Some((tx, gas, gas_price)) = receiver.recv().await {
             // let the transaction spend 4 time gas of source transaction
-            let gas = gas.checked_mul(U256::from(4)).expect("multi_except");
+            let gas = gas.checked_mul(U256::from(2)).expect("multi_except");
 
             // execute transaction
             arc_cake
@@ -117,9 +117,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     });
 
+    println!(
+        "{} Started monitoring transactions\n",
+        chrono::Utc::now().format("%Y-%m-%dT%I:%M:%S%.6f %p %Z")
+    );
     // process stream of processing pending tx
     while let Some(tx_hash) = stream.next().await {
-
         // clone required arc instances to pass to tokio thread
         let arc_contract_to_watch = Arc::clone(&env.contract_to_watch);
         let arc_desired_token = Arc::clone(&env.desired_token);
@@ -143,6 +146,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         .await
                         .unwrap_or_else(|_| eprintln!("receiver is already closed"));
                 }
+            } else {
+                eprintln!("Eventually Unable to fetch tx {:?}", tx_hash);
             }
         });
     }

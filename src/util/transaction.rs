@@ -60,6 +60,7 @@ use ethers::types::H256;
 use rand::prelude::StdRng;
 use rand::{RngCore, SeedableRng};
 use tokio::sync::mpsc;
+use tokio::sync::mpsc::Sender;
 
 /** transaction fetching utitlity
  * manages fetching of transaction with retries for non-propogated transactions
@@ -77,91 +78,7 @@ pub async fn fetch_transaction(
     );
     match arc_provider.get_transaction(tx_hash).await {
         Ok(Some(tx)) => Some(tx),
-        Ok(None) => {
-            let (tx_sender, mut tx_receiver) = mpsc::channel::<Option<Transaction>>(6);
-
-            let reciever_join_handle = tokio::spawn(async move {
-                let mut found_transaction = None;
-                while let Some(tx) = tx_receiver.recv().await {
-                    if let Some(tx_obj) = tx {
-                        found_transaction = Some(tx_obj);
-                    }
-                }
-
-                if let Some(found_transaction) = found_transaction {
-                    Some(found_transaction)
-                } else {
-                    None
-                }
-            });
-
-            let arc_provider = Arc::clone(
-                providers
-                    .get(random.next_u32() as usize % providers.len())
-                    .expect("item_not_found"),
-            );
-            let tx_sender_clone = tx_sender.clone();
-
-            tokio::spawn(async move {
-                match arc_provider.get_transaction(tx_hash).await {
-                    Ok(Some(tx)) => tx_sender_clone
-                        .send(Some(tx))
-                        .await
-                        .expect("tx receiver closed"),
-                    Ok(None) => {}
-                    Err(_) => {}
-                }
-            });
-
-            let arc_provider = Arc::clone(
-                providers
-                    .get(random.next_u32() as usize % providers.len())
-                    .expect("item_not_found"),
-            );
-            let tx_sender_clone = tx_sender.clone();
-
-            tokio::spawn(async move {
-                match arc_provider.get_transaction(tx_hash).await {
-                    Ok(Some(tx)) => tx_sender_clone
-                        .send(Some(tx))
-                        .await
-                        .expect("tx receiver closed"),
-                    Ok(None) => {}
-                    Err(_) => {}
-                }
-            });
-
-            let arc_provider = Arc::clone(
-                providers
-                    // .get(random.gen_range(0..providers.len()))
-                    .get(5)
-                    .expect("item_not_found"),
-            );
-            let tx_sender_clone = tx_sender.clone();
-
-            tokio::spawn(async move {
-                match arc_provider.get_transaction(tx_hash).await {
-                    Ok(Some(tx)) => tx_sender_clone
-                        .send(Some(tx))
-                        .await
-                        .expect("tx receiver closed"),
-                    Ok(None) => {}
-                    Err(_) => {}
-                }
-            });
-
-            let reciever_response = reciever_join_handle.await.expect("tx reciever error");
-
-            if let Some(trans) = reciever_response {
-                Some(trans)
-            } else {
-                eprintln!(
-                    "{:?} : transaction fetch retry failed even after three attempts",
-                    tx_hash
-                );
-                None
-            }
-        }
+        Ok(None) => get_transaction_from_any(providers, tx_hash, random).await,
 
         Err(err) => {
             let error_msg = match err {
@@ -181,4 +98,61 @@ pub async fn fetch_transaction(
             None
         }
     }
+}
+
+async fn get_transaction_from_any(
+    providers: Vec<Arc<Provider<Http>>>,
+    tx_hash: H256,
+    mut random: StdRng,
+) -> Option<Transaction> {
+    let (tx_sender, mut tx_receiver) = mpsc::channel::<Option<Transaction>>(6);
+
+    // receiver tokio task
+    let receiver_join_handle = tokio::spawn(async move {
+        let mut found_transaction = None;
+        while let Some(tx) = tx_receiver.recv().await {
+            if tx.is_some() {
+                found_transaction = tx;
+            }
+        }
+        found_transaction
+    });
+
+    fetch_tx_with_multiple_task(&providers, tx_hash, &mut random, &tx_sender);
+    fetch_tx_with_multiple_task(&providers, tx_hash, &mut random, &tx_sender);
+
+    let receiver_response = receiver_join_handle.await.expect("tx reciever error");
+
+    if receiver_response.is_none() {
+        eprintln!(
+            "{:?} : transaction fetch retry failed even after three attempts",
+            tx_hash
+        );
+    }
+    receiver_response
+}
+
+fn fetch_tx_with_multiple_task(
+    providers: &Vec<Arc<Provider<Http>>>,
+    tx_hash: H256,
+    random: &mut StdRng,
+    tx_sender: &Sender<Option<Transaction>>,
+) {
+    let arc_provider = Arc::clone(
+        providers
+            .get(random.next_u32() as usize % providers.len())
+            .expect("item_not_found"),
+    );
+    let tx_sender_clone = tx_sender.clone();
+
+    tokio::spawn(async move {
+        match arc_provider.get_transaction(tx_hash).await {
+            Ok(Some(tx)) => tx_sender_clone
+                .send(Some(tx))
+                .await
+                .expect("tx receiver closed"),
+            Ok(None) => {}
+            Err(_) => {}
+        }
+    });
 }

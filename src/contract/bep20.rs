@@ -10,6 +10,7 @@ use ethers::types::U256;
 use crate::util;
 
 pub struct Bep20Token {
+    token_contract_address: Address,
     token_contract: Contract<Arc<Provider<Http>>>,
     signer: SignerMiddleware<Arc<Provider<Http>>, LocalWallet>,
 }
@@ -23,6 +24,7 @@ impl Bep20Token {
         signer: LocalWallet,
     ) -> Bep20Token {
         Bep20Token {
+            token_contract_address: token_contract_address.clone(),
             token_contract: util::Util::get_contract(
                 &token_contract_address,
                 &token_contract_abi_path,
@@ -124,5 +126,9 @@ impl Bep20Token {
             "\n## executed transaction {:#?}\n",
             receipt.transaction_hash
         );
+    }
+
+    pub fn get_token_address(&self) -> &Address {
+        &self.token_contract_address
     }
 }

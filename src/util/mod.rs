@@ -61,8 +61,14 @@ impl Util {
             .await;
 
         println!(
-            "{} ({}), decimals: {}, supply: {}, balance: {}, spend limit: {}",
-            name, symbol, decimals, total_supply, balance, allowed_amount
+            "{:?} is {} ({}), decimals: {}, supply: {}, balance: {}, spend limit: {}",
+            token_contract.get_token_address(),
+            name,
+            symbol,
+            decimals,
+            total_supply,
+            balance,
+            allowed_amount
         );
         (total_supply, allowed_amount)
     }
