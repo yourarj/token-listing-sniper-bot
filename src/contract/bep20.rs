@@ -7,8 +7,11 @@ use ethers::prelude::{
 };
 use ethers::types::U256;
 
+use tracing::instrument;
+
 use crate::util;
 
+#[derive(Debug)]
 pub struct Bep20Token {
     token_contract_address: Address,
     token_contract: Contract<Arc<Provider<Http>>>,
@@ -113,7 +116,7 @@ impl Bep20Token {
             .to(self.token_contract.address())
             .data(encoded_data);
 
-        println!("{}: submitting tx", chrono::Utc::now());
+        tracing::info!("submitting tx");
 
         let pending_tx = self
             .signer

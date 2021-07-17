@@ -5,6 +5,8 @@ use ethers::prelude::{
     Address, Bytes, Http, Middleware, Provider, ProviderError, Transaction, U256,
 };
 
+use tracing::{instrument, Level};
+
 /** Transaction checker function
  * function checks if provided transaction object is of cake router
  * and also the transaction contains deals with desired token only
@@ -18,6 +20,8 @@ pub async fn check_tx(
 ) -> bool {
     if let Some(tx_to) = transaction.to {
         if tx_to.eq(&contract_to_watch) {
+            tracing::info!("tx {:?} is for target contract", transaction.hash);
+
             // extract method selector from the transaction input
             let fn_selector = transaction.input.as_ref()[0..=3]
                 .try_into()
@@ -67,7 +71,7 @@ use tracing::Instrument;
 /** transaction fetching utitlity
  * manages fetching of transaction with retries for non-propogated transactions
 **/
-#[instrument]
+#[instrument(skip(providers))]
 pub async fn fetch_transaction(
     providers: Vec<Arc<Provider<Http>>>,
     tx_hash: H256,
@@ -80,10 +84,10 @@ pub async fn fetch_transaction(
             .expect("item_not_found"),
     );
 
-    tracing::info!("first fetch attempt", tx_hash);
+    tracing::info!("first fetch attempt {:?}", tx_hash);
     match arc_provider.get_transaction(tx_hash).await {
         Ok(Some(tx)) => {
-            tracing::info!("got tx in first attempt", tx_hash);
+            tracing::info!("got tx in first attempt {:?}", tx_hash);
             Some(tx)
         }
 
@@ -102,13 +106,13 @@ pub async fn fetch_transaction(
                 ProviderError::HexError(hex_err) => hex_err.to_string(),
                 ProviderError::CustomError(cust_err) => cust_err,
             };
-            tracing::error!("tx_fetch_error", error_msg);
+            tracing::error!(message = "tx_fetch_error", %error_msg);
             None
         }
     }
 }
 
-#[instrument]
+#[instrument(skip(providers, random))]
 async fn get_transaction_from_any(
     providers: Vec<Arc<Provider<Http>>>,
     tx_hash: H256,
@@ -135,7 +139,7 @@ async fn get_transaction_from_any(
     let receiver_response = receiver_join_handle.await.expect("tx reciever error");
 
     if receiver_response.is_none() {
-        eprintln!(
+        tracing::error!(
             "{:?} : transaction fetch retry failed even after three attempts",
             tx_hash
         );
@@ -143,7 +147,7 @@ async fn get_transaction_from_any(
     receiver_response
 }
 
-#[instrument]
+#[instrument(skip(providers, random, tx_sender))]
 fn fetch_tx_with_multiple_task(
     providers: &Vec<Arc<Provider<Http>>>,
     tx_hash: H256,
@@ -160,14 +164,14 @@ fn fetch_tx_with_multiple_task(
 
     tokio::spawn(
         async move {
-            tracing::info!("fetching tx");
+            tracing::info!(message = "fetching tx");
             match arc_provider.get_transaction(tx_hash).await {
                 Ok(Some(tx)) => {
                     tracing::info!("got tx successfully");
                     tx_sender_clone
                         .send(Some(tx))
                         .await
-                        .unwrap_or_else(tracing::warn!("tx receiver already closed"))
+                        .unwrap_or_else(|_| tracing::warn!("tx receiver already closed"))
                 }
                 Ok(None) => {
                     tracing::warn!("got none")

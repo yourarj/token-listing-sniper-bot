@@ -1,4 +1,3 @@
-use std::io::{BufWriter, Write};
 use std::sync::Arc;
 
 use block_bot::contract;
@@ -10,23 +9,20 @@ use ethers::prelude::{Middleware, StreamExt, U256};
 use ethers::types::H256;
 use ethers::utils::{parse_units, Units};
 use std::error::Error;
-use tracing::Instrument;
+use tracing::{Instrument, Level};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     // tracing lib init
-    let file_appender = tracing_appender::rolling::hourly(dir, "example.log");
+    let file_appender = tracing_appender::rolling::hourly("./", "example.log");
     let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
 
-    let collector = tracing_subscriber::registry()
-        .with(EnvFilter::from_default_env().add_directive(tracing::Level::TRACE.into()))
-        .with(fmt::Subscriber::new().with_writer(non_blocking));
-    tracing::collect::set_global_default(collector).expect("Unable to set a global collector");
+    tracing_subscriber::fmt().with_writer(non_blocking).init();
 
     // env initialization
     let env = Env::new()
         .await
-        .unwrap_or_else(tracing::error!("Error occurred while initialization"));
+        .expect("Error occurred while initialization");
 
     let http_providers = &env.http_providers;
 
@@ -64,12 +60,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let (sender, mut receiver) = tokio::sync::mpsc::channel::<(H256, U256, U256)>(200);
     let sender = Arc::new(sender);
 
-    // file to write tx log
-    let file_path = format!("transactions-{}.log", chrono::Utc::now().timestamp_millis());
-    let path = std::path::Path::new(&file_path);
-    let transaction_file = std::fs::File::create(path).expect("Error creating file");
-    let mut writer = BufWriter::new(transaction_file);
-
     // clone movable inputs for receive thread
     let arc_cake = Arc::clone(&cake_router_contract);
     let arc_bnb = Arc::clone(&env.bnb_address);
@@ -81,56 +71,51 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let tx_receiver_span = tracing::span!(Level::INFO, "tx_reciever_task");
 
     // channel receiver tokio thread
-    tokio::spawn(async move {
-        // receive message sent by transmitter
-        while let Some((tx, gas, gas_price)) = receiver.recv().await {
-            // let the transaction spend 4 time gas of source transaction
-            let gas = gas.checked_mul(U256::from(2)).expect("multi_except");
+    tokio::spawn(
+        async move {
+            // receive message sent by transmitter
+            while let Some((tx, gas, gas_price)) = receiver.recv().await {
+                // let the transaction spend 4 time gas of source transaction
+                let gas = gas.checked_mul(U256::from(2)).expect("multi_except");
 
-            // execute transaction
-            arc_cake
+                tracing::info!("got liquidity add tx {:?}, going for swap", tx);
+
+                // execute transaction
+                /*arc_cake
                 .swap_exact_eth_for_tokens(
-                    parse_units(U256::from(10000u32), Units::Gwei).expect("issue parsing units"),
+                    parse_units(U256::from(10000u32), Units::Gwei)
+                        .expect("issue parsing units"),
                     *arc_bnb,
                     *arc_desired_token,
                     50u8,
                     gas,
                     gas_price,
                 )
-                .await;
+                .await;*/
 
-            let received_message = format!(
-                "{} {:?}\n",
-                chrono::Utc::now().format("%Y-%m-%dT%I:%M:%S%.6f %p %Z"),
-                tx,
-            );
-            println!("RECIEVED-MESSAGE: {}", received_message);
-            writer
-                .write(received_message.as_bytes())
-                .expect("error while writing to file");
+                // Close receiver as transaction is successful
+                tracing::info!("Closing receiver as tx successful");
+                receiver.close();
 
-            // Close receiver as transaction is successful
-            println!("Closing receiver as tx successful");
-            receiver.close();
+                // unsubscribe from the pending tx subscription
+                let is_operation_successful = arc_wss_provider
+                    .unsubscribe(subscription_id)
+                    .await
+                    .unwrap_or_else(|_| {
+                        eprintln!("Unsubscribing failed");
+                        false
+                    });
 
-            // unsubscribe from the pending tx subscription
-            let is_operation_successful = arc_wss_provider
-                .unsubscribe(subscription_id)
-                .await
-                .unwrap_or_else(|_| {
-                    eprintln!("Unsubscribing failed");
-                    false
-                });
-
-            if is_operation_successful {
-                println!(
-                    "Successfully unsubscribed from subscription: #{}",
-                    subscription_id
-                );
+                if is_operation_successful {
+                    println!(
+                        "Successfully unsubscribed from subscription: #{}",
+                        subscription_id
+                    );
+                }
             }
         }
-        .instrument(tx_receiver_span);
-    });
+        .instrument(tx_receiver_span),
+    );
 
     println!(
         "{} Started monitoring transactions\n",
@@ -147,7 +132,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let http_providers = http_providers.clone();
 
         // tracing span
-        let tx_fetch_tx_span = tracing::span!(Level::INFO, "tx_fetch_tx_task");
+        let tx_fetch_tx_span = tracing::span!(Level::INFO, "fetch_tx_1");
+
+        tracing::info!("Got new tx {:?}", tx_hash);
 
         // spawn a new tokio thread for fetching the details of received pending tx hash
         tokio::spawn(
@@ -167,7 +154,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                             .unwrap_or_else(|_| eprintln!("receiver is already closed"));
                     }
                 } else {
-                    eprintln!("Eventually Unable to fetch tx {:?}", tx_hash);
+                    tracing::error!("Alas! Eventually Unable to fetch tx {:?}", tx_hash);
                 }
             }
             .instrument(tx_fetch_tx_span),

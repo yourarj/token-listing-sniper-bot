@@ -39,11 +39,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     chrono::Utc::now().format("%Y-%m-%dT%I:%M:%S%.6f %p %Z"),
                     tx,
                 );
-                println!("RECIEVED-MESSAGE #{}: {}", counter, received_message);
                 counter += 1;
             } else {
                 // Close receiver as transaction is successful
-                println!("Saw 2 transaction now closing receiver as tx successful");
                 receiver.close();
 
                 // unsubscribe from the pending tx subscription

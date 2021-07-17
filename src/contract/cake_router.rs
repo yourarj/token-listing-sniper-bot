@@ -13,13 +13,16 @@ use ethers::abi::Detokenize;
 use ethers::contract::AbiError;
 use std::ops::Add;
 
+use tracing::instrument;
+
+#[derive(Debug)]
 pub struct CakeRouter {
     token_contract: Contract<Arc<Provider<Http>>>,
     signer: SignerMiddleware<Arc<Provider<Http>>, LocalWallet>,
 }
 // TODO check how can we reuse the common struct data members and associated ::new method
 impl CakeRouter {
-    #[instrument]
+    #[instrument(skip(provider, signer))]
     pub fn new(
         token_contract_address: Address,
         token_contract_abi_path: String,
@@ -157,7 +160,7 @@ impl CakeRouter {
 
     #[instrument]
     async fn send_monitor_tx(&self, tx_req: TransactionRequest) {
-        println!("{}: submitting tx", chrono::Utc::now());
+        tracing::info!("submitting tx");
 
         let pending_tx = self
             .signer
@@ -165,24 +168,21 @@ impl CakeRouter {
             .await
             .expect("problem while tx exec");
 
-        println!("{}: Transaction submitted", chrono::Utc::now());
+        tracing::info!("Transaction submitted");
 
         let receipt = pending_tx
             .confirmations(1)
             .await
             .expect("pending tx exec error");
 
-        println!("{}: got tx confirmation", chrono::Utc::now());
-
-        println!(
-            "\n{} tx: {:?} confirmed, execution successful?: {:?}\n",
-            chrono::Utc::now(),
+        tracing::info!(
+            "tx: {:?} confirmed, execution successful?: {:?}",
             receipt.transaction_hash,
             receipt.status
         );
     }
 
-    #[instrument]
+    #[instrument(skip(input))]
     pub fn decode_method_inputs<D: Detokenize, T: AsRef<[u8]>>(
         &self,
         function_signature: Selector,

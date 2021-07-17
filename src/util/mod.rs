@@ -6,6 +6,8 @@ use ethers::abi::Abi;
 use ethers::prelude::{Address, Contract, Http, LocalWallet, Provider, U256};
 use std::sync::Arc;
 
+use tracing::instrument;
+
 pub struct Util;
 
 impl Util {
@@ -44,10 +46,10 @@ impl Util {
                 .await;
             let _details = Self::print_bep20_token_details(&token_contract, address, spender);
         }
-        println!("Token pre-requisites completed");
+        tracing::info!("Token pre-requisites completed");
     }
 
-    #[instrument]
+    #[instrument(skip(token_contract))]
     pub async fn print_bep20_token_details(
         token_contract: &Bep20Token,
         user_address: &str,
@@ -62,7 +64,7 @@ impl Util {
             .get_spend_allowance(&user_address, spender_address)
             .await;
 
-        println!(
+        tracing::info!(
             "{:?} is {} ({}), decimals: {}, supply: {}, balance: {}, spend limit: {}",
             token_contract.get_token_address(),
             name,
