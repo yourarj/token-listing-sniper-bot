@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Upgrade to stable [ethers](https://github.com/gakonst/ethers-rs) 1.X
 
+### Added
+
+- Integrate [clap](https://github.com/clap-rs/clap) 4.X
+
 ## [0.1.0] - 2022-02-19
 
 ### Added

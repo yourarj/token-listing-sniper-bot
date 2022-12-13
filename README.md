@@ -10,3 +10,10 @@ Tested with
 May work with
 
 - Pangolin (Avalanche) ❔
+
+## Development Environment
+
+### Pre-Requisites
+
+- pkg-config
+- libssl-dev
