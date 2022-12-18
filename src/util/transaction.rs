@@ -105,6 +105,11 @@ pub async fn fetch_transaction(
                 ProviderError::SerdeJson(json_err) => json_err.to_string(),
                 ProviderError::HexError(hex_err) => hex_err.to_string(),
                 ProviderError::CustomError(cust_err) => cust_err,
+                ProviderError::EnsNotOwned(err) => err,
+                ProviderError::HTTPError(err) => err.to_string(),
+                ProviderError::UnsupportedRPC => "Unsupported RPC".into(),
+                ProviderError::UnsupportedNodeClient => "Unsupported Node Client".into(),
+                ProviderError::SignerUnavailable => "Signer Available".into(),
             };
             tracing::error!(message = "tx_fetch_error", %error_msg);
             None

@@ -1,5 +1,7 @@
 use ethers::core::k256::elliptic_curve;
-use ethers::prelude::{Address, Http, LocalWallet, Provider, ProviderError, Ws};
+use ethers::prelude::{Address, Http, LocalWallet, Provider, ProviderError};
+use ethers::providers::Ws;
+use ethers::signers::WalletError;
 use rustc_hex::FromHexError;
 use std::convert::TryFrom;
 use std::env;
@@ -47,6 +49,14 @@ impl From<ProviderError> for EnvSetUpError {
     fn from(err: ProviderError) -> Self {
         EnvSetUpError {
             error_msg: format!("{:?}", err),
+        }
+    }
+}
+
+impl From<WalletError> for EnvSetUpError {
+    fn from(value: WalletError) -> Self {
+        EnvSetUpError {
+            error_msg: format!("{:?}", value),
         }
     }
 }

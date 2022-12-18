@@ -1,16 +1,15 @@
 use std::sync::Arc;
 
 use ethers::prelude::{
-    Address, Contract, Http, LocalWallet, Middleware, Provider, Selector, SignerMiddleware,
+    Address, Http, LocalWallet, Middleware, Provider, Selector, SignerMiddleware,
     TransactionRequest,
 };
 use ethers::types::U256;
 
 use crate::util;
 use chrono::Duration;
-use ethabi_next::Token;
 use ethers::abi::Detokenize;
-use ethers::contract::AbiError;
+use ethers::contract::{AbiError, Contract};
 use std::ops::Add;
 
 use tracing::instrument;
@@ -47,21 +46,12 @@ impl CakeRouter {
         token_a: Address,
         token_b: Address,
     ) -> U256 {
-        let x = self
-            .token_contract
-            .method::<_, Token>("getAmountsOut", (amount_in, vec![token_a, token_b]))
+        self.token_contract
+            .method::<_, U256>("getAmountsOut", (amount_in, vec![token_a, token_b]))
             .expect("method_creation")
             .call()
             .await
-            .expect("method call except");
-
-        match x {
-            Token::Array(reserve) => match reserve[1] {
-                Token::Uint(num) => num,
-                _ => U256::from(0u8),
-            },
-            _ => U256::from(0u8),
-        }
+            .expect("method call except")
     }
 
     #[instrument]
@@ -170,16 +160,18 @@ impl CakeRouter {
 
         tracing::info!("Transaction submitted");
 
-        let receipt = pending_tx
+        let receipt_opt = pending_tx
             .confirmations(1)
             .await
             .expect("pending tx exec error");
 
-        tracing::info!(
-            "tx: {:?} confirmed, execution successful?: {:?}",
-            receipt.transaction_hash,
-            receipt.status
-        );
+        if let Some(receipt) = receipt_opt {
+            tracing::info!(
+                "tx: {:?} confirmed, execution successful?: {:?}",
+                receipt.transaction_hash,
+                receipt.status
+            );
+        }
     }
 
     #[instrument(skip(input))]

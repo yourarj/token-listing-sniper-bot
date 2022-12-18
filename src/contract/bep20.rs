@@ -1,9 +1,9 @@
 use std::str::FromStr;
 use std::sync::Arc;
 
+use ethers::contract::Contract;
 use ethers::prelude::{
-    Address, Contract, Http, LocalWallet, Middleware, Provider, SignerMiddleware,
-    TransactionRequest, I256,
+    Address, Http, LocalWallet, Middleware, Provider, SignerMiddleware, TransactionRequest, I256,
 };
 use ethers::types::U256;
 
@@ -126,17 +126,21 @@ impl Bep20Token {
 
         println!("{}: tx submitted", chrono::Utc::now());
 
-        let receipt = pending_tx
+        let receipt_opt = pending_tx
             .confirmations(1)
             .await
             .expect("pending tx exec error");
 
         println!("{}: got tx confirmation", chrono::Utc::now());
 
-        println!(
-            "\n## executed transaction {:#?}\n",
-            receipt.transaction_hash
-        );
+        if let Some(reciept) = receipt_opt {
+            println!(
+                "\n## executed transaction {:#?}\n",
+                reciept.transaction_hash
+            );
+        } else {
+            println!("Reciept nt found")
+        }
     }
 
     #[instrument]
