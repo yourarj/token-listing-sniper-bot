@@ -3,7 +3,8 @@ pub mod transaction;
 
 use crate::contract::bep20::Bep20Token;
 use ethers::abi::Abi;
-use ethers::prelude::{Address, Contract, Http, LocalWallet, Provider, U256};
+use ethers::contract::Contract;
+use ethers::prelude::{Address, Http, LocalWallet, Provider, U256};
 use std::sync::Arc;
 
 use tracing::instrument;
@@ -32,7 +33,7 @@ impl Util {
         wallet: LocalWallet,
         spender: Address,
     ) {
-        let address = &format!("{:?}", wallet.address());
+        let address = &format!("{:?}", wallet);
         let (total_supply, allowed_amt) =
             Self::print_bep20_token_details(&token_contract, address, spender).await;
 
@@ -41,7 +42,7 @@ impl Util {
             .checked_div(U256::from(2u8))
             .expect("div_error"))
         {
-            &token_contract
+            token_contract
                 .approve_spend_allowance(spender, total_supply)
                 .await;
             let _details = Self::print_bep20_token_details(&token_contract, address, spender);

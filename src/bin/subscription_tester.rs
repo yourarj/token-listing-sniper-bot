@@ -34,7 +34,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         // receive message sent by transmitter
         while let Some(tx) = receiver.recv().await {
             if counter < 2 {
-                let received_message = format!(
+                let _received_message = format!(
                     "{} {:?}\n",
                     chrono::Utc::now().format("%Y-%m-%dT%I:%M:%S%.6f %p %Z"),
                     tx,
@@ -76,7 +76,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 .unwrap_or_else(|_| eprintln!("receiver is already closed"));
         });
 
-        stream.unsubscribe().await;
+        stream.unsubscribe().await.expect("unable to subscribe");
     }
     println!("While let broken successfully!");
     Ok(())

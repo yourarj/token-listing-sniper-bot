@@ -7,7 +7,8 @@ use block_bot::util::transaction::{check_tx, fetch_transaction};
 
 use ethers::prelude::{Middleware, StreamExt, U256};
 use ethers::types::H256;
-use ethers::utils::{parse_units, Units};
+use ethers::utils::parse_units;
+use ethers::utils::Units;
 use std::error::Error;
 use tracing::{Instrument, Level};
 
@@ -80,18 +81,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
                 tracing::info!("got liquidity add tx {:?}, going for swap", tx);
 
+                let amt = parse_units(U256::from(10000u32), &Units::Gwei.to_string())
+                    .expect("issue parsing units");
                 // execute transaction
-                /*arc_cake
-                .swap_exact_eth_for_tokens(
-                    parse_units(U256::from(10000u32), Units::Gwei)
-                        .expect("issue parsing units"),
-                    *arc_bnb,
-                    *arc_desired_token,
-                    50u8,
-                    gas,
-                    gas_price,
-                )
-                .await;*/
+                arc_cake
+                    .swap_exact_eth_for_tokens(
+                        U256::from(amt),
+                        *arc_bnb,
+                        *arc_desired_token,
+                        50u8,
+                        gas,
+                        gas_price,
+                    )
+                    .await;
 
                 // Close receiver as transaction is successful
                 tracing::info!("Closing receiver as tx successful");
@@ -149,7 +151,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     .await
                     {
                         sender
-                            .send((transaction.hash, transaction.gas, transaction.gas_price))
+                            .send((
+                                transaction.hash,
+                                transaction.gas,
+                                transaction.gas_price.unwrap_or_default(),
+                            ))
                             .await
                             .unwrap_or_else(|_| eprintln!("receiver is already closed"));
                     }
