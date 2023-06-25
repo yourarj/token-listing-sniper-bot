@@ -39,9 +39,9 @@ Options:
 block-bot \
 --wss wss://testnet-dex.binance.org/api/ \
 --http https://data-seed-prebsc-1-s1.binance.org:8545 \
---contract oo \
---native kkk \
---token dsfsd
+--contract 0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73 \
+--native 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c \
+--token 0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82
 ```
 
 ## Development Environment
