@@ -14,7 +14,7 @@ use crate::util;
 #[derive(Debug)]
 pub struct Bep20Token {
     token_contract_address: Address,
-    token_contract: Contract<Arc<Provider<Http>>>,
+    token_contract: Contract<Provider<Http>>,
     signer: SignerMiddleware<Arc<Provider<Http>>, LocalWallet>,
 }
 
@@ -32,9 +32,9 @@ impl Bep20Token {
             token_contract: util::Util::get_contract(
                 &token_contract_address,
                 &token_contract_abi_path,
-                provider.clone(),
+                Arc::clone(&provider),
             ),
-            signer: SignerMiddleware::new(provider.clone(), signer),
+            signer: SignerMiddleware::new(provider, signer),
         }
     }
 

@@ -16,14 +16,14 @@ impl Util {
         contract_address: &Address,
         abi_path: &str,
         provider: Arc<Provider<Http>>,
-    ) -> Contract<Arc<Provider<Http>>> {
+    ) -> Contract<Provider<Http>> {
         let file =
             std::fs::read_to_string(abi_path).expect("something went wrong while reading abi file");
 
         Contract::new(
             *contract_address,
             serde_json::from_str::<Abi>(&file).expect(""),
-            provider.clone(),
+            provider,
         )
     }
 

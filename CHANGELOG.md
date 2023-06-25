@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - FEATURE: Add bot **PAUSE** support. In paused mode bot will not watch liquidity add events.
 - FEATURE: Add bot **WATCH** mode. In this mode bot will watch for liquidity add events but will not respond to them.
 
+## [1.0.1] - 2022-12-18
+
+### CHANGED
+
+- Upgrade to stable [ethers](https://github.com/gakonst/ethers-rs) 2.X
+
 ## [1.0.0] - 2022-12-18
 
 ### CHANGED
