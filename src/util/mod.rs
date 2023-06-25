@@ -1,4 +1,14 @@
+//! Utility module
+//!
+//! cli_args
+//! env_setup
+//! transaction
+//!
+
+mod cli;
+pub mod contract_util;
 pub mod env_setup;
+pub mod error;
 pub mod transaction;
 
 use crate::contract::bep20::Bep20Token;
