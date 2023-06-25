@@ -1,3 +1,4 @@
+use clap::Parser;
 use ethers::core::k256::elliptic_curve;
 use ethers::prelude::{Address, Http, LocalWallet, Provider, ProviderError};
 use ethers::providers::Ws;
@@ -8,6 +9,8 @@ use std::env;
 use std::env::VarError;
 use std::fmt::Display;
 use std::sync::Arc;
+
+use super::cli;
 
 pub struct Env {
     pub local_wallet: LocalWallet,
@@ -70,6 +73,9 @@ impl Display for EnvSetUpError {
 
 impl Env {
     pub async fn new() -> Result<Self, EnvSetUpError> {
+        // parse args
+        cli::Args::parse();
+
         // pvt wallet
         let local_wallet =
             env::var("mtmsk_acc").map(|pvt_key| pvt_key.parse::<LocalWallet>())??;

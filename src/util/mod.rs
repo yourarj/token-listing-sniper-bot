@@ -1,3 +1,11 @@
+//! Utility module
+//!
+//! cli_args
+//! env_setup
+//! transaction
+//!
+
+mod cli;
 pub mod env_setup;
 pub mod transaction;
 
