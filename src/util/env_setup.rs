@@ -15,7 +15,8 @@ pub struct Env {
     pub local_wallet: LocalWallet,
     pub wss_provider: Arc<Provider<Ws>>,
     pub http_providers: Vec<Arc<Provider<Http>>>,
-    pub contract_to_watch: Arc<Address>,
+    pub factory_contract: Arc<Address>,
+    pub router_contract: Arc<Address>,
     pub bnb_address: Arc<Address>,
     pub desired_token: Arc<Address>,
 }
@@ -32,7 +33,10 @@ impl Env {
         let bnb_address = Arc::new(args.native.parse::<Address>()?);
 
         // contacts to watch
-        let contract_to_watch = Arc::new(args.contract.parse::<Address>()?);
+        let factory = Arc::new(args.factory.parse::<Address>()?);
+
+        // contacts to watch
+        let router = Arc::new(args.router.parse::<Address>()?);
 
         // ws client
         let ws = Ws::connect(args.wss)
@@ -65,7 +69,8 @@ impl Env {
             local_wallet,
             wss_provider,
             http_providers,
-            contract_to_watch,
+            factory_contract: factory,
+            router_contract: router,
             bnb_address,
             desired_token,
         })

@@ -4,6 +4,7 @@ use block_bot::contract;
 use block_bot::util;
 use block_bot::util::env_setup::Env;
 use block_bot::util::transaction::{check_tx, fetch_transaction};
+use block_bot::util::Util;
 
 use ethers::prelude::{Middleware, StreamExt, U256};
 use ethers::types::H256;
@@ -25,9 +26,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let http_providers = &env.http_providers;
 
+    let cake_factory_contract = Arc::new(Util::get_contract(
+        &env.factory_contract,
+        "./abi/cake-factory.json",
+        Arc::clone(env.http_providers.get(0).unwrap()),
+    ));
+
     let cake_router_contract = Arc::new(contract::cake_router::CakeRouter::new(
-        *Arc::clone(&env.contract_to_watch),
-        "./abi/cake-router.json".to_string(),
+        *Arc::clone(&env.router_contract),
+        "./abi/cake-router.json".to_owned(),
         Arc::clone(env.http_providers.get(0).unwrap()),
         env.local_wallet.clone(),
     ));
@@ -35,7 +42,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // bep20 token prerequisites
     let bep20token = contract::bep20::Bep20Token::new(
         *Arc::clone(&env.desired_token),
-        String::from("./abi/bep-20-token-abi.json"),
+        "./abi/bep-20-token-abi.json".to_owned(),
         Arc::clone(env.http_providers.get(0).unwrap()),
         env.local_wallet.clone(),
     );
@@ -44,7 +51,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     util::Util::do_prerequisites(
         &bep20token,
         env.local_wallet.clone(),
-        *Arc::clone(&env.contract_to_watch),
+        *Arc::clone(&env.factory_contract),
     )
     .await;
 
@@ -125,10 +132,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // process stream of processing pending tx
     while let Some(tx_hash) = stream.next().await {
         // clone required arc instances to pass to tokio thread
-        let arc_contract_to_watch = Arc::clone(&env.contract_to_watch);
+        let arc_contract_to_watch = Arc::clone(&env.factory_contract);
         let arc_desired_token = Arc::clone(&env.desired_token);
         let sender = Arc::clone(&sender);
-        let cake_router_contract = Arc::clone(&cake_router_contract);
+        let cake_factory_contract = Arc::clone(&cake_factory_contract);
         let http_providers = http_providers.clone();
 
         // tracing span
@@ -143,7 +150,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     if check_tx(
                         &transaction,
                         &*arc_contract_to_watch,
-                        Arc::clone(&cake_router_contract),
+                        &cake_factory_contract,
                         arc_desired_token,
                     )
                     .await

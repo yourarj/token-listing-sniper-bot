@@ -1,8 +1,7 @@
 use std::{convert::TryInto, sync::Arc};
 
-use crate::contract;
 use ethers::prelude::{
-    Address, Bytes, Http, Middleware, Provider, ProviderError, Transaction, U256,
+    Address, Bytes, Contract, Http, Middleware, Provider, ProviderError, Transaction, U256,
 };
 
 use tracing::{instrument, Level};
@@ -15,7 +14,7 @@ use tracing::{instrument, Level};
 pub async fn check_tx(
     transaction: &Transaction,
     contract_to_watch: &Address,
-    cake_router: Arc<contract::cake_router::CakeRouter>,
+    cake_factory: &Contract<Provider<Http>>,
     desired_token: Arc<Address>,
 ) -> bool {
     if let Some(tx_to) = transaction.to {
@@ -28,23 +27,23 @@ pub async fn check_tx(
                 .expect("got an error");
 
             // extract method name from the selector
-            let method_name = cake_router.get_method_name(fn_selector);
+            let method_name = contract_util::get_method_name(&cake_factory, fn_selector);
 
             // check if the method invoked is liquidity add event
             if method_name.eq("addLiquidityETH") {
-                let (token, ..) = cake_router
-                    .decode_method_inputs::<(Address, U256, U256, U256, Address, U256), Bytes>(
-                        fn_selector,
-                        transaction.input.clone(),
-                    )
+                let (token, ..) =
+                    contract_util::decode_method_inputs::<
+                        (Address, U256, U256, U256, Address, U256),
+                        Bytes,
+                    >(&cake_factory, fn_selector, transaction.input.clone())
                     .expect("problem decoding");
                 token.eq(&*desired_token)
             } else if method_name.eq("addLiquidity") {
-                let (token_a, token_b, ..) = cake_router
-                    .decode_method_inputs::<(Address, Address, U256, U256, U256, U256, Address, U256), Bytes>(
-                        fn_selector,
-                        transaction.input.clone(),
-                    )
+                let (token_a, token_b, ..) =
+                    contract_util::decode_method_inputs::<
+                        (Address, Address, U256, U256, U256, U256, Address, U256),
+                        Bytes,
+                    >(&cake_factory, fn_selector, transaction.input.clone())
                     .expect("problem decoding");
                 token_a.eq(&*desired_token) || token_b.eq(&*desired_token)
             } else {
@@ -67,6 +66,8 @@ use rand::{RngCore, SeedableRng};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::Sender;
 use tracing::Instrument;
+
+use crate::util::contract_util;
 
 /** transaction fetching utitlity
  * manages fetching of transaction with retries for non-propogated transactions

@@ -6,6 +6,7 @@
 //!
 
 mod cli;
+pub mod contract_util;
 pub mod env_setup;
 pub mod error;
 pub mod transaction;
