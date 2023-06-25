@@ -7,6 +7,7 @@
 
 mod cli;
 pub mod env_setup;
+pub mod error;
 pub mod transaction;
 
 use crate::contract::bep20::Bep20Token;

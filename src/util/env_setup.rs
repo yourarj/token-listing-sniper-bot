@@ -1,16 +1,15 @@
 use clap::Parser;
-use ethers::core::k256::elliptic_curve;
-use ethers::prelude::{Address, Http, LocalWallet, Provider, ProviderError};
+
+use ethers::prelude::{Address, Http, LocalWallet, Provider};
 use ethers::providers::Ws;
-use ethers::signers::WalletError;
-use rustc_hex::FromHexError;
+
 use std::convert::TryFrom;
 use std::env;
-use std::env::VarError;
-use std::fmt::Display;
+
 use std::sync::Arc;
 
 use super::cli;
+use super::error::EnvSetUpError;
 
 pub struct Env {
     pub local_wallet: LocalWallet,
@@ -21,78 +20,33 @@ pub struct Env {
     pub desired_token: Arc<Address>,
 }
 
-#[derive(Debug)]
-pub struct EnvSetUpError {
-    error_msg: String,
-}
-impl From<VarError> for EnvSetUpError {
-    fn from(err: VarError) -> Self {
-        EnvSetUpError {
-            error_msg: err.to_string(),
-        }
-    }
-}
-
-impl From<elliptic_curve::Error> for EnvSetUpError {
-    fn from(err: elliptic_curve::Error) -> Self {
-        EnvSetUpError {
-            error_msg: err.to_string(),
-        }
-    }
-}
-
-impl From<FromHexError> for EnvSetUpError {
-    fn from(err: FromHexError) -> Self {
-        EnvSetUpError {
-            error_msg: err.to_string(),
-        }
-    }
-}
-
-impl From<ProviderError> for EnvSetUpError {
-    fn from(err: ProviderError) -> Self {
-        EnvSetUpError {
-            error_msg: format!("{:?}", err),
-        }
-    }
-}
-
-impl From<WalletError> for EnvSetUpError {
-    fn from(value: WalletError) -> Self {
-        EnvSetUpError {
-            error_msg: format!("{:?}", value),
-        }
-    }
-}
-
-impl Display for EnvSetUpError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.error_msg)
-    }
-}
-
 impl Env {
     pub async fn new() -> Result<Self, EnvSetUpError> {
         // parse args
-        cli::Args::parse();
-
-        // pvt wallet
-        let local_wallet =
-            env::var("mtmsk_acc").map(|pvt_key| pvt_key.parse::<LocalWallet>())??;
+        let args = cli::Args::parse();
 
         // token addresses we are going to deal with
-        let desired_token = Env::parse_arced_address("desired_token_address")?;
+        let desired_token = Arc::new(args.token.parse::<Address>()?);
 
         // bnb address
-        let bnb_address = Env::parse_arced_address("wbnb_address")?;
+        let bnb_address = Arc::new(args.native.parse::<Address>()?);
 
         // contacts to watch
-        let contract_to_watch = Env::parse_arced_address("contract_to_watch")?;
+        let contract_to_watch = Arc::new(args.contract.parse::<Address>()?);
+
+        // ws client
+        let ws = Ws::connect(args.wss)
+            .await
+            .expect("Error while making WebSocket connection");
+
+        // wss provider
+        let wss_provider: Arc<Provider<Ws>> =
+            Arc::new(Provider::new(ws).interval(std::time::Duration::from_millis(30)));
 
         // http providers
-        let http_providers = env::var("http_providers")?;
-        let http_providers: Vec<Arc<Provider<Http>>> = http_providers
-            .split("|")
+        let http_providers: Vec<Arc<Provider<Http>>> = args
+            .http
+            .iter()
             .map(|provider_url| {
                 Arc::new(Provider::<Http>::try_from(provider_url).expect(&format!(
                     "Error creating Http provider from url {}",
@@ -101,13 +55,11 @@ impl Env {
             })
             .collect();
 
-        // wss provider
-        let wss_provider = env::var("wss_provider_url")?;
-        let ws = Ws::connect(wss_provider)
-            .await
-            .expect("Error while making WebSocket connection");
-        let wss_provider =
-            Arc::new(Provider::new(ws).interval(std::time::Duration::from_millis(30)));
+        const PVT_KEY_ENVKEY: &str = "BB_PRIVATE_KEY";
+        // pvt wallet
+        let local_wallet = env::var(PVT_KEY_ENVKEY)
+            .map(|pvt_key| pvt_key.parse::<LocalWallet>())
+            .map_err(|e| EnvSetUpError::EnvVarNotFound(PVT_KEY_ENVKEY.to_owned(), e))??;
 
         Ok(Env {
             local_wallet,
@@ -117,11 +69,5 @@ impl Env {
             bnb_address,
             desired_token,
         })
-    }
-    fn parse_arced_address(env_var: &str) -> Result<Arc<Address>, EnvSetUpError> {
-        let arc = env::var(env_var)
-            .map(|add_str| add_str.parse::<Address>())?
-            .map(|address| Arc::new(address))?;
-        Ok(arc)
     }
 }

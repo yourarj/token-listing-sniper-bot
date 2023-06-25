@@ -1,4 +1,4 @@
-use clap::Parser;
+use clap::{ArgAction, Parser};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -6,8 +6,8 @@ pub(super) struct Args {
     // pub local_wallet: LocalWallet,
     #[arg(short, long, help = "wss provider")]
     pub wss: String,
-    #[arg(short, long, action=clap::ArgAction::Append, help = "http provider")]
-    pub http: String,
+    #[arg(short, long, action=ArgAction::Append, help = "http provider")]
+    pub http: Vec<String>,
 
     #[arg(
         short,

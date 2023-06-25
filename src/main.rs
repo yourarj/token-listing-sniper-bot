@@ -15,15 +15,13 @@ use tracing::{Instrument, Level};
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     // tracing lib init
-    let file_appender = tracing_appender::rolling::hourly("./", "example.log");
+    let file_appender = tracing_appender::rolling::hourly("./logs/", "example.log");
     let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
 
     tracing_subscriber::fmt().with_writer(non_blocking).init();
 
     // env initialization
-    let env = Env::new()
-        .await
-        .expect("Error occurred while initialization");
+    let env = Env::new().await?;
 
     let http_providers = &env.http_providers;
 
