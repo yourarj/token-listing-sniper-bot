@@ -16,7 +16,7 @@ use tracing::instrument;
 
 #[derive(Debug)]
 pub struct CakeRouter {
-    token_contract: Contract<Arc<Provider<Http>>>,
+    token_contract: Contract<Provider<Http>>,
     signer: SignerMiddleware<Arc<Provider<Http>>, LocalWallet>,
 }
 // TODO check how can we reuse the common struct data members and associated ::new method

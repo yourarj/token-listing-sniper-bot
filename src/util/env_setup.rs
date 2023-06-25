@@ -6,6 +6,7 @@ use rustc_hex::FromHexError;
 use std::convert::TryFrom;
 use std::env;
 use std::env::VarError;
+use std::fmt::Display;
 use std::sync::Arc;
 
 pub struct Env {
@@ -58,6 +59,12 @@ impl From<WalletError> for EnvSetUpError {
         EnvSetUpError {
             error_msg: format!("{:?}", value),
         }
+    }
+}
+
+impl Display for EnvSetUpError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.error_msg)
     }
 }
 
