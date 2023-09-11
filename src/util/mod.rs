@@ -10,6 +10,7 @@ pub mod contract_util;
 pub mod env_setup;
 pub mod error;
 pub mod transaction;
+pub mod gui;
 
 use crate::contract::bep20::Bep20Token;
 use ethers::abi::Abi;

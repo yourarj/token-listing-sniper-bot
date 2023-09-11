@@ -1,3 +1,4 @@
+use std::str::FromStr;
 use std::sync::Arc;
 
 use block_bot::contract;
@@ -12,6 +13,7 @@ use ethers::utils::parse_units;
 use ethers::utils::Units;
 use std::error::Error;
 use tracing::{Instrument, Level};
+use util::gui::*;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -21,8 +23,43 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     tracing_subscriber::fmt().with_writer(non_blocking).init();
 
-    // env initialization
-    let env = Env::new().await?;
+    let env: Env;
+
+    // Check if CLI arguments exist; this will count the program name itself.
+    if std::env::args().count() > 1 {
+        match Env::from_cli().await {
+            Ok(cli_env) => {
+                env = cli_env;
+            }
+            Err(why) => {
+                return Err(why.into());
+            }
+        }
+    } else {
+        match gui().await {
+            Ok(gui_env) => {
+                env = gui_env;
+            }
+            Err(why) => {
+                println!("dog");
+                return Err(why.into());
+            }
+        }
+    }
+    println!("{:#?}", env);
+    // // env initialization
+    // let environment = Env::from_cli().await;
+
+    // let env: Env = match environment {
+    //     Ok(env) => env,
+    //     Err(_why) => match gui().await {
+    //         Ok(env) => env,
+    //         Err(why) => {
+    //             println!("dog");
+    //             return Err(why.into());
+    //         }
+    //     },
+    // };
 
     let http_providers = &env.http_providers;
 
@@ -70,8 +107,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let arc_cake = Arc::clone(&cake_router_contract);
     let arc_bnb = Arc::clone(&env.bnb_address);
     let arc_desired_token = Arc::clone(&env.desired_token);
-    let arc_wss_provider = Arc::clone(&env.wss_provider);
+    let arc_wss_provider: Arc<ethers::providers::Provider<ethers::providers::Ws>> =
+        Arc::clone(&env.wss_provider);
     let subscription_id = stream.id;
+    let arc_amount_to_spend = Arc::clone(&env.amount_to_spend);
 
     // tracing span
     let tx_receiver_span = tracing::span!(Level::INFO, "tx_reciever_task");
@@ -86,8 +125,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
                 tracing::info!("got liquidity add tx {:?}, going for swap", tx);
 
-                let amt = parse_units(U256::from(10000u32), &Units::Gwei.to_string())
-                    .expect("issue parsing units");
+                let amt = parse_units(
+                    U256::from_str(&arc_amount_to_spend.to_string())
+                        .expect("Expected U256 for amount_to_spend"),
+                    &Units::Gwei.to_string(),
+                )
+                .expect("issue parsing units");
                 // execute transaction
                 arc_cake
                     .swap_exact_eth_for_tokens(

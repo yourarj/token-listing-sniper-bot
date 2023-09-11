@@ -8,7 +8,7 @@ use block_bot::util;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let env = util::env_setup::Env::new()
+    let env = util::env_setup::Env::from_cli()
         .await
         .expect("Error occurred while initialization");
 

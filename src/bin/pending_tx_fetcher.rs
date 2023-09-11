@@ -10,7 +10,7 @@ async fn main() {
     tracing_subscriber::fmt().with_writer(non_blocking).init();
 
     // env initialization
-    let env = Env::new()
+    let env = Env::from_cli()
         .await
         .expect("Error occurred while initialization");
 

@@ -20,4 +20,7 @@ pub(super) struct Args {
 
     #[arg(long, help = "token address. This token will be bought")]
     pub token: String,
+
+    #[arg(long, help = "amount to spend")]
+    pub amount_to_spend: String,
 }
