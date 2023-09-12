@@ -17,6 +17,7 @@ May work with
 
 ## How to run bot
 
+### CLI
 ```
 $block-bot --help
 
@@ -34,7 +35,7 @@ Options:
   -V, --version              Print version
 ```
 
-## e.g.
+### e.g.
 ```
 block-bot \
 --wss wss://testnet-dex.binance.org/api/ \
@@ -43,6 +44,9 @@ block-bot \
 --native 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c \
 --token 0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82
 ```
+
+### GUI
+Running ```$block-bot``` with no flags will start the GUI
 
 ## Development Environment
 
