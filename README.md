@@ -46,7 +46,7 @@ block-bot \
 ```
 
 ### GUI
-Running `$block-bot --help`
+Running ```$block-bot``` with no flags will start the GUI
 
 ## Development Environment
 
