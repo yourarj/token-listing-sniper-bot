@@ -41,25 +41,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 env = gui_env;
             }
             Err(why) => {
-                println!("dog");
                 return Err(why.into());
             }
         }
     }
-    println!("{:#?}", env);
-    // // env initialization
-    // let environment = Env::from_cli().await;
-
-    // let env: Env = match environment {
-    //     Ok(env) => env,
-    //     Err(_why) => match gui().await {
-    //         Ok(env) => env,
-    //         Err(why) => {
-    //             println!("dog");
-    //             return Err(why.into());
-    //         }
-    //     },
-    // };
 
     let http_providers = &env.http_providers;
 

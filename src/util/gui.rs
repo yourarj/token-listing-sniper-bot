@@ -1,6 +1,9 @@
 use crate::util::{env_setup::Env, error::EnvSetUpError, Address};
 use eframe::egui;
+use ethers::providers::{Http, Middleware, Provider, Ws};
+use secp256k1::SecretKey;
 use serde::{Deserialize, Serialize};
+use std::convert::TryFrom;
 use std::{collections::HashMap, fs, fs::File, io::Write, str::FromStr};
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -86,6 +89,9 @@ struct App {
     invalid_address_popup: bool,
     show_gas_limit_error: bool,
     show_amount_to_trade_error: bool,
+    invalid_pvk_popup: bool,
+    invalid_http_popup: bool,
+    invalid_wss_popup: bool,
     gas_limit: u64,
     amount_to_trade: f64,
     wss: String,
@@ -104,6 +110,9 @@ impl App {
             invalid_address_popup: false,
             show_gas_limit_error: false,
             show_amount_to_trade_error: false,
+            invalid_pvk_popup: false,
+            invalid_http_popup: false,
+            invalid_wss_popup: false,
             gas_limit: 0,
             amount_to_trade: 0.0,
             wss: String::new(),
@@ -127,6 +136,9 @@ impl App {
                     invalid_address_popup: false,
                     show_gas_limit_error: false,
                     show_amount_to_trade_error: false,
+                    invalid_pvk_popup: false,
+                    invalid_http_popup: false,
+                    invalid_wss_popup: false,
                     gas_limit: config.gas_limit,
                     amount_to_trade: config.amount_to_trade as f64,
                     wss: config.wss,
@@ -215,11 +227,15 @@ impl eframe::App for App {
                     if ui.button("Save").clicked() {
                         self.saved = true;
 
-                        let zero = String::from_str("0000000000000000000000000000000000000000000000000000000000000000").unwrap();
+                        let zero = String::from_str(
+                            "0000000000000000000000000000000000000000000000000000000000000000",
+                        )
+                        .unwrap();
 
-                        if !self.temp.temp_private_key.is_empty() && self.temp.temp_private_key != zero {
-                            let data: String = format!("PVK={}", self.temp.temp_private_key);
-                            fs::write(".env", data).expect("Failed to write pvk to env");
+                        if self.temp.temp_private_key == zero
+                            || !is_valid_private_key(&self.temp.temp_private_key)
+                        {
+                            self.invalid_pvk_popup = true;
                         }
 
                         if !self.temp.temp_router_contract_address.is_empty() {
@@ -239,12 +255,43 @@ impl eframe::App for App {
                                 self.temp.temp_factory_contract_address.clone();
                         }
                         if !self.temp.temp_wss.is_empty() {
-                            self.wss = self.temp.temp_wss.clone();
+                            let (tx, rx) = std::sync::mpsc::channel();
+                            let temp_wss = self.temp.temp_wss.clone();
+                            tokio::spawn(async move {
+                                let result = test_wss_connection(&temp_wss).await;
+                                tx.send(result).unwrap();
+                            });
+                            let result = rx.recv().unwrap();
+
+                            match result {
+                                true => {
+                                    self.wss = self.temp.temp_wss.clone();  
+                                },
+                                false => {
+                                    self.invalid_wss_popup = true;
+                                },
+                            }
+                            
                         }
                         if !self.temp.temp_http.is_empty() {
-                            self.http = self.temp.temp_http.clone();
-                        }
+                            let (tx, rx) = std::sync::mpsc::channel();
+                            let temp_http = self.temp.temp_http.clone();
+                            tokio::spawn(async move {
+                                let result = test_http_connection(&temp_http).await;
+                                tx.send(result).unwrap();
+                            });
+                            let result = rx.recv().unwrap();
 
+                            match result {
+                                true => {
+                                    self.http = self.temp.temp_http.clone();  
+                                },
+                                false => {
+                                    self.invalid_http_popup = true;
+                                },
+                            }
+                            
+                        }
                         if !self.temp.temp_gas_limit.is_empty() {
                             match self.temp.temp_gas_limit.parse::<u64>() {
                                 Ok(num) => {
@@ -280,6 +327,35 @@ impl eframe::App for App {
                     }
                 });
 
+                if self.invalid_pvk_popup {
+                    egui::Window::new("Invalid Private Key").show(ctx, |ui| {
+                        ui.label("Provided private key is not EVM compatible");
+                        if ui.button("Close").clicked() {
+                            self.invalid_pvk_popup = false;
+                            self.saved = false;
+                        }
+                    });
+                }
+
+                if self.invalid_wss_popup {
+                    egui::Window::new("No WS").show(ctx, |ui| {
+                        ui.label("Cannot connect to node at provided ws url");
+                        if ui.button("Close").clicked() {
+                            self.invalid_wss_popup = false;
+                            self.saved = false;
+                        }
+                    });
+                }
+                if self.invalid_http_popup {
+                    egui::Window::new("No HTTP").show(ctx, |ui| {
+                        ui.label("Cannot connect to node at provided http url");
+                        if ui.button("Close").clicked() {
+                            self.invalid_http_popup = false;
+                            self.saved = false;
+                        }
+                    });
+                }
+
                 if self.invalid_address_popup {
                     egui::Window::new("Invalid Address").show(ctx, |ui| {
                         ui.label("One or more addresses are invalid.");
@@ -310,6 +386,9 @@ impl eframe::App for App {
                 }
 
                 if self.saved {
+                    let data: String = format!("PVK={}", self.temp.temp_private_key);
+                    fs::write(".env", data).expect("Failed to write pvk to env");
+
                     let config: Config = Config {
                         factory_contract_address: self.factory_contract_address.clone(),
                         router_contract_address: self.router_contract_address.clone(),
@@ -325,6 +404,22 @@ impl eframe::App for App {
                 }
             });
         });
+    }
+}
+
+pub fn is_valid_private_key(key: &String) -> bool {
+    if key.len() != 64 {
+        return false;
+    }
+
+    match hex::decode(key) {
+        Ok(decoded) => {
+            if decoded.len() != 32 {
+                return false;
+            }
+            SecretKey::from_slice(&decoded).is_ok()
+        }
+        Err(_) => false,
     }
 }
 
@@ -351,4 +446,21 @@ fn check_valid_addresses(address_strs: Vec<&String>) -> HashMap<&String, bool> {
     }
 
     return results;
+}
+
+pub async fn test_http_connection(url: &str) -> bool {
+    match Provider::<Http>::try_from(url) {
+        Ok(provider) => provider.get_block_number().await.is_ok(),
+        Err(_) => false,
+    }
+}
+
+pub async fn test_wss_connection(url: &str) -> bool {
+    match Ws::connect(url).await {
+        Ok(ws) => {
+            let provider: Provider<Ws> = Provider::new(ws);
+            provider.get_block_number().await.is_ok()
+        }
+        Err(_) => false,
+    }
 }
